@@ -46,6 +46,14 @@ class pix2pix(object):
         self.d_bn2 = batch_norm(name='d_bn2')
         self.d_bn3 = batch_norm(name='d_bn3')
 
+        self.e_bn1 = batch_norm(name='e_bn1')
+        self.e_bn2 = batch_norm(name='e_bn2')
+        self.e_bn3 = batch_norm(name='e_bn3')
+
+        self.f_bn1 = batch_norm(name='f_bn1')
+        self.f_bn2 = batch_norm(name='f_bn2')
+        self.f_bn3 = batch_norm(name='f_bn3')
+
         self.g_bn_e2 = batch_norm(name='g_bn_e2')
         self.g_bn_e3 = batch_norm(name='g_bn_e3')
         self.g_bn_e4 = batch_norm(name='g_bn_e4')
@@ -79,31 +87,68 @@ class pix2pix(object):
 
         self.real_AB = tf.concat([self.real_A, self.real_B], 3)
         self.fake_AB = tf.concat([self.real_A, self.fake_B], 3)
-        self.D, self.D_logits = self.discriminator(self.real_AB, reuse=False)
-        self.D_, self.D_logits_ = self.discriminator(self.fake_AB, reuse=True)
+
+        self.D, self.D_logits = self.discriminator1(self.real_AB, reuse=False)
+        self.D_, self.D_logits_ = self.discriminator1(self.fake_AB, reuse=True)
+        self.E, self.E_logits = self.discriminator2(self.real_AB, reuse=False)
+        self.E_, self.E_logits_ = self.discriminator2(self.fake_AB, reuse=True)
+        self.F, self.F_logits = self.discriminator3(self.real_AB, reuse=False)
+        self.F_, self.F_logits_ = self.discriminator3(self.fake_AB, reuse=True)
+
 
         self.fake_B_sample = self.sampler(self.real_A)
 
+
         self.d_sum = tf.summary.histogram("d", self.D)
         self.d__sum = tf.summary.histogram("d_", self.D_)
+        self.e_sum = tf.summary.histogram("e", self.E)
+        self.e__sum = tf.summary.histogram("e_", self.E_)
+        self.f_sum = tf.summary.histogram("f", self.F)
+        self.f__sum = tf.summary.histogram("f_", self.F_)
+
+
         self.fake_B_sum = tf.summary.image("fake_B", self.fake_B)
+
 
         self.d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D_logits, labels=tf.ones_like(self.D)))
         self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D_logits_, labels=tf.zeros_like(self.D_)))
         self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D_logits_, labels=tf.ones_like(self.D_))) \
                         + self.L1_lambda * tf.reduce_mean(tf.abs(self.real_B - self.fake_B))
 
+        self.e_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.E_logits, labels=tf.ones_like(self.E)))
+        self.e_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.E_logits_, labels=tf.zeros_like(self.E_)))
+        self.g_e_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.E_logits_, labels=tf.ones_like(self.E_))) \
+                        + self.L1_lambda * tf.reduce_mean(tf.abs(self.real_B - self.fake_B))
+
+        self.f_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.F_logits, labels=tf.ones_like(self.F)))
+        self.f_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.F_logits_, labels=tf.zeros_like(self.F_)))
+        self.g_f_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.F_logits_, labels=tf.ones_like(self.F_))) \
+                        + self.L1_lambda * tf.reduce_mean(tf.abs(self.real_B - self.fake_B))
+
+
         self.d_loss_real_sum = tf.summary.scalar("d_loss_real", self.d_loss_real)
         self.d_loss_fake_sum = tf.summary.scalar("d_loss_fake", self.d_loss_fake)
+        self.e_loss_real_sum = tf.summary.scalar("e_loss_real", self.e_loss_real)
+        self.e_loss_fake_sum = tf.summary.scalar("e_loss_fake", self.e_loss_fake)
+        self.f_loss_real_sum = tf.summary.scalar("f_loss_real", self.f_loss_real)
+        self.f_loss_fake_sum = tf.summary.scalar("f_loss_fake", self.f_loss_fake)
+
 
         self.d_loss = self.d_loss_real + self.d_loss_fake
+        self.e_loss = self.e_loss_real + self.e_loss_fake
+        self.f_loss = self.f_loss_real + self.f_loss_fake
+
 
         self.g_loss_sum = tf.summary.scalar("g_loss", self.g_loss)
         self.d_loss_sum = tf.summary.scalar("d_loss", self.d_loss)
+        self.e_loss_sum = tf.summary.scalar("e_loss", self.e_loss)
+        self.f_loss_sum = tf.summary.scalar("f_loss", self.f_loss)
 
         t_vars = tf.trainable_variables()
 
         self.d_vars = [var for var in t_vars if 'd_' in var.name]
+        self.e_vars = [var for var in t_vars if 'e_' in var.name]
+        self.f_vars = [var for var in t_vars if 'f_' in var.name]
         self.g_vars = [var for var in t_vars if 'g_' in var.name]
 
         self.saver = tf.train.Saver()
@@ -133,6 +178,11 @@ class pix2pix(object):
         """Train pix2pix"""
         d_optim = tf.train.AdamOptimizer(args.lr, beta1=args.beta1) \
                           .minimize(self.d_loss, var_list=self.d_vars)
+        e_optim = tf.train.AdamOptimizer(args.lr, beta1=args.beta1) \
+                          .minimize(self.e_loss, var_list=self.e_vars)
+        f_optim = tf.train.AdamOptimizer(args.lr, beta1=args.beta1) \
+                          .minimize(self.f_loss, var_list=self.f_vars)
+
         g_optim = tf.train.AdamOptimizer(args.lr, beta1=args.beta1) \
                           .minimize(self.g_loss, var_list=self.g_vars)
 
@@ -141,7 +191,13 @@ class pix2pix(object):
 
         self.g_sum = tf.summary.merge([self.d__sum,
             self.fake_B_sum, self.d_loss_fake_sum, self.g_loss_sum])
+
+
         self.d_sum = tf.summary.merge([self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
+        self.e_sum = tf.summary.merge([self.e_sum, self.e_loss_real_sum, self.e_loss_sum])
+        self.f_sum = tf.summary.merge([self.f_sum, self.f_loss_real_sum, self.f_loss_sum])
+
+
         self.writer = tf.summary.FileWriter("./logs", self.sess.graph)
 
         counter = 1
@@ -168,7 +224,18 @@ class pix2pix(object):
                 # Update D network
                 _, summary_str = self.sess.run([d_optim, self.d_sum],
                                                feed_dict={ self.real_data: batch_images })
+
                 self.writer.add_summary(summary_str, counter)
+                _, summary_str_e = self.sess.run([e_optim, self.e_sum],
+                                               feed_dict={ self.real_data: batch_images })
+
+                self.writer.add_summary(summary_str, counter)
+                _, summary_str_f = self.sess.run([f_optim, self.f_sum],
+                                               feed_dict={ self.real_data: batch_images })
+
+                self.writer.add_summary(summary_str, counter)
+                self.writer.add_summary(summary_str_e, counter)
+                self.writer.add_summary(summary_str_f, counter)
 
                 # Update G network
                 _, summary_str = self.sess.run([g_optim, self.g_sum],
@@ -182,12 +249,16 @@ class pix2pix(object):
 
                 errD_fake = self.d_loss_fake.eval({self.real_data: batch_images})
                 errD_real = self.d_loss_real.eval({self.real_data: batch_images})
+                errE_fake = self.e_loss_fake.eval({self.real_data: batch_images})
+                errE_real = self.e_loss_real.eval({self.real_data: batch_images})
+                errF_fake = self.f_loss_fake.eval({self.real_data: batch_images})
+                errF_real = self.f_loss_real.eval({self.real_data: batch_images})
                 errG = self.g_loss.eval({self.real_data: batch_images})
 
                 counter += 1
                 print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
                     % (epoch, idx, batch_idxs,
-                        time.time() - start_time, errD_fake+errD_real, errG))
+                        time.time() - start_time, errD_fake+errD_real, errE_fake+errE_real, errF_fake+errF_real, errG))
 
                 if np.mod(counter, 100) == 1:
                     self.sample_model(args.sample_dir, epoch, idx)
@@ -195,7 +266,8 @@ class pix2pix(object):
                 if np.mod(counter, 500) == 2:
                     self.save(args.checkpoint_dir, counter)
 
-    def discriminator(self, image, y=None, reuse=False):
+
+    def discriminator1(self, image, y=None, reuse=False):
 
         with tf.variable_scope("discriminator") as scope:
 
@@ -216,6 +288,54 @@ class pix2pix(object):
             h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
 
             return tf.nn.sigmoid(h4), h4
+
+
+    def discriminator2(self, image, y=None, reuse=False):
+
+        with tf.variable_scope("discriminator") as scope:
+
+            # image is 256 x 256 x (input_c_dim + output_c_dim)
+            if reuse:
+                tf.get_variable_scope().reuse_variables()
+            else:
+                assert tf.get_variable_scope().reuse == False
+
+            h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+            # h0 is (128 x 128 x self.df_dim)
+            h1 = lrelu(self.e_bn1(conv2d(h0, self.df_dim*2, name='e_h1_conv')))
+            # h1 is (64 x 64 x self.df_dim*2)
+            h2 = lrelu(self.e_bn2(conv2d(h1, self.df_dim*4, name='e_h2_conv')))
+            # h2 is (32x 32 x self.df_dim*4)
+            h3 = lrelu(self.e_bn3(conv2d(h2, self.df_dim*8, d_h=1, d_w=1, name='e_h3_conv')))
+            # h3 is (16 x 16 x self.df_dim*8)
+            h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'e_h3_lin')
+
+            return tf.nn.sigmoid(h4), h4
+
+
+    def discriminator3(self, image, y=None, reuse=False):
+
+        with tf.variable_scope("discriminator") as scope:
+
+            # image is 256 x 256 x (input_c_dim + output_c_dim)
+            if reuse:
+                tf.get_variable_scope().reuse_variables()
+            else:
+                assert tf.get_variable_scope().reuse == False
+
+            h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+            # h0 is (128 x 128 x self.df_dim)
+            h1 = lrelu(self.f_bn1(conv2d(h0, self.df_dim*2, name='f_h1_conv')))
+            # h1 is (64 x 64 x self.df_dim*2)
+            h2 = lrelu(self.f_bn2(conv2d(h1, self.df_dim*4, name='f_h2_conv')))
+            # h2 is (32x 32 x self.df_dim*4)
+            h3 = lrelu(self.f_bn3(conv2d(h2, self.df_dim*8, d_h=1, d_w=1, name='f_h3_conv')))
+            # h3 is (16 x 16 x self.df_dim*8)
+            h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'f_h3_lin')
+
+            return tf.nn.sigmoid(h4), h4
+
+
 
     def generator(self, image, y=None):
         with tf.variable_scope("generator") as scope:
