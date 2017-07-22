@@ -256,7 +256,7 @@ class pix2pix(object):
                 errG = self.g_loss.eval({self.real_data: batch_images})
 
                 counter += 1
-                print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
+                print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, e_loss: %.8f, f_loss: %.8f, g_loss: %.8f" \
                     % (epoch, idx, batch_idxs,
                         time.time() - start_time, errD_fake+errD_real, errE_fake+errE_real, errF_fake+errF_real, errG))
 
@@ -292,7 +292,7 @@ class pix2pix(object):
 
     def discriminator2(self, image, y=None, reuse=False):
 
-        with tf.variable_scope("discriminator") as scope:
+        with tf.variable_scope("discriminator2") as scope:
 
             # image is 256 x 256 x (input_c_dim + output_c_dim)
             if reuse:
@@ -315,7 +315,7 @@ class pix2pix(object):
 
     def discriminator3(self, image, y=None, reuse=False):
 
-        with tf.variable_scope("discriminator") as scope:
+        with tf.variable_scope("discriminator3") as scope:
 
             # image is 256 x 256 x (input_c_dim + output_c_dim)
             if reuse:
